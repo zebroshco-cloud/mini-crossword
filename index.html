@@ -3,13 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Mini Crossword</title>
-  <!-- Tailwind (Play CDN) -->
+  <title>Crossword built with love for you | Rosh</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React + ReactDOM from CDN -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <!-- Babel for in-browser JSX transform (simple, no build) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="bg-white text-neutral-900">
@@ -18,215 +15,208 @@
   <script type="text/babel">
     const { useMemo, useState, useEffect, useRef } = React;
 
-    // Utilities
+    // ---------- helpers ----------
     const clone = (x) => JSON.parse(JSON.stringify(x));
     const DIRS = { ACROSS: "across", DOWN: "down" };
+    const pad = (n) => (n < 10 ? "0" + n : "" + n);
+    const setCharAt = (str, i, ch) => str.substring(0, i) + ch + str.substring(i + 1);
+    const inBounds = (N, r, c) => r>=0 && r<N && c>=0 && c<N;
 
-    const SAMPLE_PUZZLES = [
-      {
-        id: "sample-1",
-        title: "Morning Warmup",
-        author: "You",
-        date: "2025-08-27",
-        size: 5,
-        grid: [
-          "CAFE#",
-          "AREA#",
-          "FRODO",
-          "#ECHO",
-          "#SOLO",
+    // ---------- grid (single-word answers only) ----------
+    // Across: LIMIT / AN / MI / STEAM / ER / GO / ROVER
+    // Down:   LASER / INTRO / IMAGE / TIMOR
+    const BASE_GRID = ["LIMIT","AN#MI","STEAM","ER#GO","ROVER"];
+
+    // ---------- clue banks by difficulty ----------
+    const CLUES = {
+      easy: {
+        across: [
+          ["Upper limit","Cap","Maximum allowed"],
+          ["Indefinite article","Article before a vowel sound","Small word before 'hour'"],
+          ["Solfège note after 're'","Note between re and fa","Do-re-__"],
+          ["Power for old trains","Kettle output","Vapor from boiling water"],
+          ["Hesitation sound","Filler syllable","Stammer syllable"],
+          ["Green light","Permission to start","Proceed"],
+          ["Mars explorer, e.g.","Wandering dog’s name, often","NASA vehicle on Mars"]
         ],
-        clues: {
-          across: {
-            "1": "Coffee spot",
-            "3": "Zone or field",
-            "6": "Baggins of the Shire",
-            "7": "Sound reflection",
-            "8": "Han ___"
-          },
-          down: {
-            "1": "Car horn sound",
-            "2": "Exists",
-            "4": "Golf peg",
-            "5": "Not many"
-          }
-        }
+        down: [
+          ["Barcode scanner beam","Surgical beam","Cutting light"],
+          ["Album opener","Prologue","Lead-in"],
+          ["Likeness","Picture","Public persona"],
+          ["____-Leste","Island split with Indonesia","Eastern half of a Southeast Asian island"]
+        ]
       },
-      {
-        id: "blank-5x5",
-        title: "Blank Starter",
-        author: "",
-        date: "2025-08-27",
-        size: 5,
-        grid: [
-          "#####",
-          "#####",
-          "#####",
-          "#####",
-          "#####",
+      medium: {
+        across: [
+          ["Upper bound","Ceiling","Cap imposed by policy"],
+          ["Article heard before 'hour'","Grammar bit before a vowel sound","One, in grammar"],
+          ["Note between re and fa","Third tone in solfège","Scale syllable after 're'"],
+          ["Pressure that builds","Power for pistons of old","What whistles from a kettle"],
+          ["Falter filler","Hesitation syllable","Speaker’s stall"],
+          ["Get moving","Leave the starting line","Advance"],
+          ["Curiosity, for one","Wanderer","Red-planet vehicle"]
         ],
-        clues: { across: {}, down: {} }
+        down: [
+          ["Coherent cutter","Checkout line reader","Surgical instrument, in a beam"],
+          ["Intro segment","Track zero, sometimes","Lead-in before verse"],
+          ["Image","Screen icon, broadly","Public face"],
+          ["Timor of ____-Leste","Island opposite 'West' in its name","Southeast Asian island with an East/West split"]
+        ]
+      },
+      hard: {
+        across: [
+          ["Limiter’s endpoint","Ceiling on growth","Policy cap"],
+          ["Clitic before a vowel sound","Vowel-led article","One, to grammarians"],
+          ["Tonic’s mediant, in solfège","Note nestled between re and fa","Third degree (solfège)"],
+          ["Expanding vapor","Piston propellant (antique)","Boiler output"],
+          ["Vocal stall","Dysfluency bit","Filler in a falter"],
+          ["Proceed signal","Leave the blocks","Advance from stop"],
+          ["Perseverance’s kin","Wanderer by design","Martian field vehicle"]
+        ],
+        down: [
+          ["Coherent light for cutting","Checkout scanner line","Laser scalpel, essentially"],
+          ["Paratext before the main","Opening track, sometimes","Front matter in brief"],
+          ["Persona to the public","Simulacrum","Cast image"],
+          ["Island in a hyphenated nation","The '—Leste' of a country name","Half of a state across from West Nusa Tenggara"]
+        ]
       }
-    ];
+    };
+
+    // ---------- crossword mechanics ----------
+    const nextCell = ({ N, grid, r, c, dir }) => {
+      const step = dir === "across" ? [0,1] : [1,0];
+      let nr = r + step[0], nc = c + step[1];
+      while (inBounds(N, nr, nc) && grid[nr][nc] === "#") { nr += step[0]; nc += step[1]; }
+      return inBounds(N, nr, nc) ? { r: nr, c: nc } : null;
+    };
+    const prevCell = ({ N, grid, r, c, dir }) => {
+      const step = dir === "across" ? [0,-1] : [-1,0];
+      let nr = r + step[0], nc = c + step[1];
+      while (inBounds(N, nr, nc) && grid[nr][nc] === "#") { nr += step[0]; nc += step[1]; }
+      return inBounds(N, nr, nc) ? { r: nr, c: nc } : null;
+    };
+    const emptyUserGridFrom = (grid) => grid.map(row => row.replace(/[^#]/g, " "));
 
     function generateMeta(grid) {
       const N = grid.length;
-      const isBlock = (r, c) => grid[r][c] === "#";
       const numbering = Array.from({ length: N }, () => Array(N).fill(null));
       let num = 0;
 
-      for (let r = 0; r < N; r++) {
-        for (let c = 0; c < N; c++) {
+      for (let r=0; r<N; r++) {
+        for (let c=0; c<N; c++) {
           const ch = grid[r][c];
-          let startsAcross = false;
-          let startsDown = false;
-          if (ch !== "#") {
-            if (c === 0 || grid[r][c - 1] === "#") {
-              if (c + 1 < N && grid[r][c + 1] !== "#") startsAcross = true;
-            }
-            if (r === 0 || grid[r - 1][c] === "#") {
-              if (r + 1 < N && grid[r + 1][c] !== "#") startsDown = true;
-            }
-          }
-          if (startsAcross || startsDown) {
-            num += 1;
-            numbering[r][c] = num;
-          }
+          if (ch === "#") continue;
+          const startsAcross = (c===0 || grid[r][c-1]==="#") && c+1<N && grid[r][c+1]!=="#";
+          const startsDown   = (r===0 || grid[r-1][c]==="#") && r+1<N && grid[r+1][c]!=="#";
+          if (startsAcross || startsDown) numbering[r][c] = ++num;
         }
       }
 
       const across = [];
-      for (let r = 0; r < N; r++) {
-        let c = 0;
+      for (let r=0; r<N; r++) {
+        let c=0;
         while (c < N) {
-          if (grid[r][c] !== "#" && (c === 0 || grid[r][c - 1] === "#")) {
-            let startC = c;
-            let letters = "";
-            while (c < N && grid[r][c] !== "#") {
-              letters += grid[r][c];
-              c++;
-            }
-            if (letters.length > 1) {
-              across.push({ number: numbering[r][startC], row: r, col: startC, length: letters.length, answer: letters });
-            }
-          } else {
-            c++;
-          }
+          if (grid[r][c] !== "#" && (c===0 || grid[r][c-1]==="#")) {
+            const startC = c; let s="";
+            while (c < N && grid[r][c] !== "#") { s += grid[r][c]; c++; }
+            if (s.length > 1) across.push({ number: numbering[r][startC], row:r, col:startC, length:s.length, answer:s });
+          } else c++;
         }
       }
 
       const down = [];
-      for (let c = 0; c < N; c++) {
-        let r = 0;
+      for (let c=0; c<N; c++) {
+        let r=0;
         while (r < N) {
-          if (grid[r][c] !== "#" && (r === 0 || grid[r - 1][c] === "#")) {
-            let startR = r;
-            let letters = "";
-            while (r < N && grid[r][c] !== "#") {
-              letters += grid[r][c];
-              r++;
-            }
-            if (letters.length > 1) {
-              down.push({ number: numbering[startR][c], row: startR, col: c, length: letters.length, answer: letters });
-            }
-          } else {
-            r++;
-          }
+          if (grid[r][c] !== "#" && (r===0 || grid[r-1][c]==="#")) {
+            const startR = r; let s="";
+            while (r < N && grid[r][c] !== "#") { s += grid[r][c]; r++; }
+            if (s.length > 1) down.push({ number: numbering[startR][c], row:startR, col:c, length:s.length, answer:s });
+          } else r++;
         }
       }
       return { N, numbering, across, down };
     }
 
-    function emptyUserGridFrom(grid) { return grid.map((row) => row.replace(/[^#]/g, " ")); }
-    function setCharAt(str, idx, ch) { return str.substring(0, idx) + ch + str.substring(idx + 1); }
-    function inBounds(N, r, c) { return r >= 0 && r < N && c >= 0 && c < N; }
+    function materializePuzzle(grid, banks) {
+      const meta = generateMeta(grid);
+      const pick = (arr) => arr[Math.floor(Math.random()*arr.length)];
 
-    function nextCell({ N, grid, r, c, dir }) {
-      const step = dir === DIRS.ACROSS ? [0, 1] : [1, 0];
-      let nr = r + step[0];
-      let nc = c + step[1];
-      while (inBounds(N, nr, nc) && grid[nr][nc] === "#") { nr += step[0]; nc += step[1]; }
-      if (!inBounds(N, nr, nc)) return null;
-      return { r: nr, c: nc };
-    }
-    function prevCell({ N, grid, r, c, dir }) {
-      const step = dir === DIRS.ACROSS ? [0, -1] : [-1, 0];
-      let nr = r + step[0];
-      let nc = c + step[1];
-      while (inBounds(N, nr, nc) && grid[nr][nc] === "#") { nr += step[0]; nc += step[1]; }
-      if (!inBounds(N, nr, nc)) return null;
-      return { r: nr, c: nc };
-    }
+      const acrossClues = {};
+      const downClues   = {};
 
-    function usePuzzle(initialPuzzle) {
-      const [puzzle, setPuzzle] = useState(() => clone(initialPuzzle));
-      const meta = useMemo(() => generateMeta(puzzle.grid), [puzzle.grid]);
-      const [userGrid, setUserGrid] = useState(() => emptyUserGridFrom(puzzle.grid));
-      const [dir, setDir] = useState(DIRS.ACROSS);
-      const [active, setActive] = useState(() => {
-        for (let r = 0; r < meta.N; r++) for (let c = 0; c < meta.N; c++) if (puzzle.grid[r][c] !== "#") return { r, c };
-        return { r: 0, c: 0 };
+      meta.across.forEach((run, i) => {
+        const pool = (banks.across[i] || [String(run.answer)]);
+        acrossClues[run.number] = pick(pool);
       });
-      const [checked, setChecked] = useState(false);
-      useEffect(() => {
-        setUserGrid(emptyUserGridFrom(puzzle.grid));
-        setChecked(false);
-        for (let r = 0; r < meta.N; r++) for (let c = 0; c < meta.N; c++) if (puzzle.grid[r][c] !== "#") { setActive({ r, c }); return; }
-      }, [puzzle.id]);
-      return { puzzle, setPuzzle, meta, userGrid, setUserGrid, dir, setDir, active, setActive, checked, setChecked };
+      meta.down.forEach((run, i) => {
+        const pool = (banks.down[i] || [String(run.answer)]);
+        downClues[run.number] = pick(pool);
+      });
+
+      return {
+        id: "mini-" + Math.floor(Math.random()*1e9),
+        title: "Mini Crossword",
+        author: "Rosh",
+        date: "",
+        size: grid.length,
+        grid: grid.slice(),
+        clues: { across: acrossClues, down: downClues },
+        meta
+      };
     }
 
-    function getCurrentRun(meta, dir, r, c) {
-      const runs = dir === DIRS.ACROSS ? meta.across : meta.down;
-      for (const run of runs) {
-        const { row, col, length } = run;
-        if (dir === DIRS.ACROSS) { if (r === row && c >= col && c < col + length) return run; }
-        else { if (c === col && r >= row && r < row + length) return run; }
-      }
-      return null;
-    }
-    function coordsOfRun(run, dir) {
-      const coords = [];
-      if (!run) return coords;
-      for (let i = 0; i < run.length; i++) coords.push(dir === DIRS.ACROSS ? { r: run.row, c: run.col + i } : { r: run.row + i, c: run.col });
-      return coords;
-    }
-
-    function MiniCell({ cell, isActive, inActiveWord, userCh, correct, onClick }) {
-      const { ch, num } = cell;
-      if (ch === "#") return <div className="bg-neutral-900 rounded-md" />;
+    // ---------- UI atoms ----------
+    function MiniCell({ cell, isActive, inActiveWord, userCh, correct, disabled, onClick }) {
+      if (cell.ch === "#") return <div className="bg-neutral-900 rounded-md" />;
       const base = "relative rounded-md border text-center flex items-center justify-center select-none aspect-square";
-      const color = isActive ? "border-indigo-500 ring-2 ring-indigo-300" : inActiveWord ? "border-indigo-300" : "border-neutral-300";
+      const color = disabled ? "border-neutral-300 bg-neutral-100"
+                  : isActive ? "border-indigo-500 ring-2 ring-indigo-300"
+                  : inActiveWord ? "border-indigo-300"
+                  : "border-neutral-300";
       const wrong = correct === false ? "bg-red-50" : "";
       const right = correct === true ? "bg-green-50" : "";
       return (
-        <button onClick={onClick} className={`${base} ${color} ${wrong} ${right}`} aria-label={`Cell ${num ?? ''}`}>
-          {num && (<span className="absolute top-0.5 left-1 text-[10px] text-neutral-500 select-none">{num}</span>)}
-          <span className="text-xl font-semibold tracking-wide">{(userCh || " ")}</span>
+        <button onClick={onClick} disabled={disabled} className={`${base} ${color} ${wrong} ${right}`} aria-label="cell">
+          {cell.num && <span className="absolute top-0.5 left-1 text-[10px] text-neutral-500 select-none">{cell.num}</span>}
+          <span className="text-xl font-semibold">{userCh || " "}</span>
         </button>
       );
     }
 
-    function Controls({ onClear, onCheck, onRevealRun, onRevealAll, onImport, onExport }) {
+    function Controls({ timeLeft, disabled, level, setLevel, onNew, onClear, onCheck, onRevealRun, onRevealAll, onImport, onExport }) {
       const [importText, setImportText] = useState("");
+      const mins = Math.floor(timeLeft/60), secs = timeLeft%60;
       return (
         <div className="flex flex-wrap items-center gap-2">
-          <button className="px-3 py-1 rounded-md border bg-white" onClick={onClear}>Clear</button>
-          <button className="px-3 py-1 rounded-md border bg-white" onClick={onCheck}>Check</button>
+          <div className="px-3 py-1 rounded-md border bg-white font-mono text-sm">⏱ {pad(mins)}:{pad(secs)}</div>
+
+          {/* Difficulty selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm">Difficulty:</span>
+            <select className="px-2 py-1 border rounded-md text-sm"
+                    value={level}
+                    onChange={(e)=>setLevel(e.target.value)}>
+              <option>Easy</option>
+              <option>Medium</option>
+              <option>Hard</option>
+            </select>
+          </div>
+
+          <button className="px-3 py-1 rounded-md border bg-white" onClick={onNew}>New puzzle</button>
+          <div className="w-px h-6 bg-neutral-300 mx-1" />
+          <button className="px-3 py-1 rounded-md border bg-white" onClick={onClear} disabled={disabled}>Clear</button>
+          <button className="px-3 py-1 rounded-md border bg-white" onClick={onCheck} disabled={disabled}>Check</button>
           <button className="px-3 py-1 rounded-md border bg-white" onClick={onRevealRun}>Reveal Word</button>
           <button className="px-3 py-1 rounded-md border bg-white" onClick={onRevealAll}>Reveal All</button>
-          <div className="w-px h-6 bg-neutral-300 mx-1" />
-          <details className="group">
+          <details className="ml-2">
             <summary className="cursor-pointer px-3 py-1 rounded-md border bg-white inline-block">Import / Export</summary>
             <div className="mt-2 p-3 border rounded-md bg-neutral-50 w-[480px] max-w-[90vw]">
               <div className="text-sm mb-1 font-medium">Import JSON</div>
-              <textarea className="w-full h-28 p-2 border rounded-md text-xs font-mono" placeholder="Paste a puzzle JSON here and click Import" value={importText} onChange={(e) => setImportText(e.target.value)} />
+              <textarea className="w-full h-28 p-2 border rounded-md text-xs font-mono" placeholder='{"id":"mine","size":5,"grid":["#####",...],"clues":{"across":{},"down":{}}}' value={importText} onChange={(e)=>setImportText(e.target.value)} />
               <div className="flex gap-2 mt-2">
-                <button className="px-3 py-1 rounded-md border bg-white" onClick={() => onImport(importText)}>Import</button>
+                <button className="px-3 py-1 rounded-md border bg-white" onClick={()=>onImport(importText)}>Import</button>
                 <button className="px-3 py-1 rounded-md border bg-white" onClick={onExport}>Export Current</button>
-              </div>
-              <div className="text-[11px] text-neutral-500 mt-2">
-                JSON shape: {"{"}{"{"id","title","author","date","size","grid":["#####",...],"clues":{"across":{"1":"..."},"down":{}}}"}{"}"}
               </div>
             </div>
           </details>
@@ -234,80 +224,132 @@
       );
     }
 
-    function ClueList({ title, runs, cluesMap, activeNumber, onSelect }) {
+    function Overlay({ title, subtitle, primary, secondary }) {
       return (
-        <div>
-          <h3 className="text-sm uppercase tracking-wide text-neutral-500 mb-2">{title}</h3>
-          <div className="space-y-1">
-            {runs.map((run) => {
-              const key = run.number?.toString();
-              const text = (cluesMap && key && cluesMap[key]) || "(add a clue)";
-              const isActive = activeNumber === run.number;
-              return (
-                <button key={`${title}-${run.number}`} onClick={() => onSelect(run)} className={`w-full text-left px-3 py-2 rounded-md border ${isActive ? 'bg-indigo-50 border-indigo-300' : 'bg-white border-neutral-200 hover:bg-neutral-50'}`}>
-                  <div className="text-[11px] text-neutral-500">{run.number}</div>
-                  <div className="text-sm leading-snug">{text}</div>
-                  <div className="text-[11px] text-neutral-400 mt-0.5">{run.length} letters</div>
-                </button>
-              );
-            })}
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-[420px] max-w-[90vw] text-center">
+            <h2 className="text-xl font-semibold">{title}</h2>
+            {subtitle && <p className="text-neutral-600 mt-1">{subtitle}</p>}
+            <div className="mt-4 flex items-center justify-center gap-2">
+              {primary}
+              {secondary}
+            </div>
           </div>
         </div>
       );
     }
 
-    function MiniCrosswordApp() {
-      const [puzzles, setPuzzles] = useState(SAMPLE_PUZZLES);
-      const [currentId, setCurrentId] = useState(SAMPLE_PUZZLES[0].id);
-      const currentPuzzle = useMemo(() => puzzles.find(p => p.id === currentId), [puzzles, currentId]);
-      const { puzzle, setPuzzle, meta, userGrid, setUserGrid, dir, setDir, active, setActive, checked, setChecked } = usePuzzle(currentPuzzle);
+    // ---------- App ----------
+    function App() {
+      // Difficulty (default Medium)
+      const [level, setLevel] = useState("Medium");
 
-      useEffect(() => { setPuzzle(clone(currentPuzzle)); }, [currentPuzzle.id]);
-      const N = meta.N;
-      const activeRun = getCurrentRun(meta, dir, active.r, active.c);
-      const activeCoords = (function(run, dir){ const a=[]; if(!run) return a; for(let i=0;i<run.length;i++){ a.push(dir===DIRS.ACROSS?{r:run.row,c:run.col+i}:{r:run.row+i,c:run.col}); } return a; })(activeRun, dir);
-      const activeNumber = activeRun?.number ?? null;
+      // 10-minute timer state (declare before effects that use it)
+      const [timeLeft, setTimeLeft] = useState(600);
+      const [timeUp, setTimeUp] = useState(false);
+      const [solved, setSolved] = useState(false);
+
+      // Build a fresh puzzle whenever page loads, level changes, or "New puzzle"
+      const [seed, setSeed] = useState(() => Math.random());
+      const banks = CLUES[level.toLowerCase()];
+      const puzzle = useMemo(() => materializePuzzle(BASE_GRID, banks), [seed, level]);
+
+      // State derived from the current puzzle instance
+      const [puz, setPuz] = useState(puzzle);
+      const [userGrid, setUserGrid] = useState(emptyUserGridFrom(puzzle.grid));
+      const [dir, setDir] = useState(DIRS.ACROSS);
+      const [active, setActive] = useState(() => {
+        for (let r=0; r<puzzle.meta.N; r++) for (let c=0; c<puzzle.meta.N; c++) if (puzzle.grid[r][c] !== "#") return { r, c };
+        return { r:0, c:0 };
+      });
+      const [checked, setChecked] = useState(false);
+
+      // When puzzle changes (seed or level), reset play state + timer
+      useEffect(() => {
+        setPuz(puzzle);
+        setUserGrid(emptyUserGridFrom(puzzle.grid));
+        setChecked(false);
+        outer: for (let r=0; r<puzzle.meta.N; r++) for (let c=0; c<puzzle.meta.N; c++) if (puzzle.grid[r][c] !== "#") { setActive({ r, c }); break outer; }
+        setTimeLeft(600); setTimeUp(false); setSolved(false);
+      }, [puzzle.id]);
+
+      // 10-minute ticking timer
+      useEffect(() => {
+        if (timeUp || solved) return;
+        const t = setInterval(() => setTimeLeft(x => {
+          if (x <= 1) { clearInterval(t); setTimeUp(true); return 0; }
+          return x - 1;
+        }), 1000);
+        return () => clearInterval(t);
+      }, [timeUp, solved]);
+
+      // recompute solved
+      useEffect(() => {
+        const N = puz.meta.N;
+        for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
+          const sol = puz.grid[r][c], usr = userGrid[r][c];
+          if (sol === "#") continue;
+          if (usr !== sol) { setSolved(false); return; }
+        }
+        setSolved(true);
+      }, [userGrid, puz.grid]);
+
+      const N = puz.meta.N;
+      const getCurrentRun = (meta, dir, r, c) => {
+        const runs = dir === DIRS.ACROSS ? meta.across : meta.down;
+        for (const run of runs) {
+          if (dir === DIRS.ACROSS) { if (r === run.row && c >= run.col && c < run.col + run.length) return run; }
+          else { if (c === run.col && r >= run.row && r < run.row + run.length) return run; }
+        }
+        return null;
+      };
+      const coordsOfRun = (run, dir) => run ? Array.from({length: run.length}, (_,i)=> dir===DIRS.ACROSS?{r:run.row,c:run.col+i}:{r:run.row+i,c:run.col}) : [];
+      const activeRun = getCurrentRun(puz.meta, dir, active.r, active.c);
+      const activeCoords = coordsOfRun(activeRun, dir);
       const gridRef = useRef(null);
 
+      // keyboard
       useEffect(() => {
         const el = gridRef.current; if (!el) return;
         const handler = (e) => {
+          if (timeUp || solved) return;
           if (!el.contains(document.activeElement)) return;
-          const key = e.key;
-          if (/^[a-zA-Z]$/.test(key)) {
+          const k = e.key;
+          if (/^[a-zA-Z]$/.test(k)) {
             e.preventDefault();
-            const ch = key.toUpperCase();
-            if (puzzle.grid[active.r][active.c] === '#') return;
+            if (puz.grid[active.r][active.c] === "#") return;
             const next = [...userGrid];
-            next[active.r] = setCharAt(next[active.r], active.c, ch);
-            setUserGrid(next);
-            setChecked(false);
-            const nxt = nextCell({ N, grid: puzzle.grid, r: active.r, c: active.c, dir });
-            if (nxt) setActive(nxt);
+            next[active.r] = setCharAt(next[active.r], active.c, k.toUpperCase());
+            setUserGrid(next); setChecked(false);
+            const step = dir === "across" ? [0,1] : [1,0];
+            let nr = active.r + step[0], nc = active.c + step[1];
+            while (inBounds(N, nr, nc) && puz.grid[nr][nc] === "#") { nr += step[0]; nc += step[1]; }
+            if (inBounds(N, nr, nc)) setActive({ r: nr, c: nc });
             return;
           }
-          if (key === 'Backspace') {
+          if (k === "Backspace") {
             e.preventDefault();
-            const hasLetter = userGrid[active.r][active.c] !== ' ' && puzzle.grid[active.r][active.c] !== '#';
             const next = [...userGrid];
-            if (hasLetter) {
-              next[active.r] = setCharAt(next[active.r], active.c, ' ');
+            const has = userGrid[active.r][active.c] !== " " && puz.grid[active.r][active.c] !== "#";
+            if (has) {
+              next[active.r] = setCharAt(next[active.r], active.c, " ");
               setUserGrid(next);
             } else {
-              const prv = prevCell({ N, grid: puzzle.grid, r: active.r, c: active.c, dir });
-              if (prv) {
-                next[prv.r] = setCharAt(next[prv.r], prv.c, ' ');
-                setUserGrid(next);
-                setActive(prv);
+              const step = dir === "across" ? [0,-1] : [-1,0];
+              let nr = active.r + step[0], nc = active.c + step[1];
+              while (inBounds(N, nr, nc) && puz.grid[nr][nc] === "#") { nr += step[0]; nc += step[1]; }
+              if (inBounds(N, nr, nc)) {
+                next[nr] = setCharAt(next[nr], nc, " ");
+                setUserGrid(next); setActive({ r: nr, c: nc });
               }
             }
             setChecked(false);
             return;
           }
-          if (key === ' ') { e.preventDefault(); setDir((d) => d === DIRS.ACROSS ? DIRS.DOWN : DIRS.ACROSS); return; }
-          if (key === 'Enter') {
+          if (k === " ") { e.preventDefault(); setDir(d => d===DIRS.ACROSS ? DIRS.DOWN : DIRS.ACROSS); return; }
+          if (k === "Enter") {
             e.preventDefault();
-            const runs = dir === DIRS.ACROSS ? meta.across : meta.down;
+            const runs = dir===DIRS.ACROSS ? puz.meta.across : puz.meta.down;
             if (!activeRun) return;
             const idx = runs.findIndex(r => r.number === activeRun.number);
             const nextRun = runs[(idx + 1) % runs.length];
@@ -318,129 +360,155 @@
             e.preventDefault();
             const nr = Math.max(0, Math.min(N - 1, active.r + dr));
             const nc = Math.max(0, Math.min(N - 1, active.c + dc));
-            if (puzzle.grid[nr][nc] !== '#') setActive({ r: nr, c: nc });
+            if (puz.grid[nr][nc] !== "#") setActive({ r: nr, c: nc });
           };
-          if (key === 'ArrowUp') return mv(-1, 0);
-          if (key === 'ArrowDown') return mv(1, 0);
-          if (key === 'ArrowLeft') return mv(0, -1);
-          if (key === 'ArrowRight') return mv(0, 1);
+          if (k === "ArrowUp") return mv(-1,0);
+          if (k === "ArrowDown") return mv(1,0);
+          if (k === "ArrowLeft") return mv(0,-1);
+          if (k === "ArrowRight") return mv(0,1);
         };
-        document.addEventListener('keydown', handler);
-        return () => document.removeEventListener('keydown', handler);
-      }, [active, dir, userGrid, puzzle.grid, meta]);
+        document.addEventListener("keydown", handler);
+        return () => document.removeEventListener("keydown", handler);
+      }, [active, dir, userGrid, puz.grid, puz.meta, timeUp, solved]);
 
-      const clearAll = () => { setUserGrid(emptyUserGridFrom(puzzle.grid)); setChecked(false); };
-      const check = () => { setChecked(true); };
+      // actions
+      const clearAll  = () => { if (timeUp) return; setUserGrid(emptyUserGridFrom(puz.grid)); setChecked(false); };
+      const check     = () => { if (timeUp) return; setChecked(true); };
       const revealRun = () => {
         if (!activeRun) return;
         const { row, col, length } = activeRun;
         const next = [...userGrid];
-        if (dir === DIRS.ACROSS) {
-          for (let i = 0; i < length; i++) next[row] = setCharAt(next[row], col + i, puzzle.grid[row][col + i]);
-        } else {
-          for (let i = 0; i < length; i++) next[row + i] = setCharAt(next[row + i], col, puzzle.grid[row + i][col]);
-        }
+        if (dir === DIRS.ACROSS) for (let i=0;i<length;i++) next[row] = setCharAt(next[row], col+i, puz.grid[row][col+i]);
+        else                      for (let i=0;i<length;i++) next[row+i] = setCharAt(next[row+i], col, puz.grid[row+i][col]);
         setUserGrid(next);
       };
-      const revealAll = () => { setUserGrid(puzzle.grid.map(row => row.replace(/#/g, '#'))); };
-      const handleCellClick = (r, c) => { if (puzzle.grid[r][c] === '#') return; if (active.r === r && active.c === c) setDir((d) => d === DIRS.ACROSS ? DIRS.DOWN : DIRS.ACROSS); else setActive({ r, c }); };
-      const onImport = (text) => {
-        try {
-          const obj = JSON.parse(text);
-          if (!obj.id) obj.id = `import-${Date.now()}`;
-          if (!obj.size || obj.grid?.length !== obj.size) throw new Error('Grid size mismatch');
-          setPuzzles((prev) => [...prev, obj]);
-          setCurrentId(obj.id);
-        } catch (e) { alert(`Import failed: ${e.message}`); }
-      };
-      const onExport = () => {
-        const data = JSON.stringify(puzzle, null, 2);
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-        a.download = `${puzzle.title || puzzle.id}.json`;
-        a.click();
-      };
+      const revealAll = () => setUserGrid(puz.grid.map(r => r.replace(/#/g, '#')));
+      const newPuzzle = () => setSeed(Math.random());  // fresh puzzle at current difficulty
 
-      const metaN = meta.N;
-      const correctness = React.useMemo(() => {
+      const correctness = useMemo(() => {
         if (!checked) return null;
-        const marks = Array.from({ length: metaN }, () => Array(metaN).fill(null));
-        for (let r = 0; r < metaN; r++) {
-          for (let c = 0; c < metaN; c++) {
-            const sol = puzzle.grid[r][c];
-            const usr = userGrid[r][c];
-            if (sol === '#') { marks[r][c] = null; continue; }
-            if (usr === ' ') { marks[r][c] = false; continue; }
-            marks[r][c] = usr === sol;
-          }
+        const mark = Array.from({ length: N }, () => Array(N).fill(null));
+        for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
+          const sol = puz.grid[r][c], usr = userGrid[r][c];
+          if (sol === "#") { mark[r][c] = null; continue; }
+          if (usr === " ") { mark[r][c] = false; continue; }
+          mark[r][c] = usr === sol;
         }
-        return marks;
-      }, [checked, userGrid, puzzle.grid]);
-
-      const gridUI = (
-        <div ref={gridRef} tabIndex={0} className="outline-none" onKeyDown={(e) => { if (e.key === ' ') e.preventDefault(); }}>
-          <div className="grid" style={{ gridTemplateColumns: `repeat(${N}, minmax(0, 1fr))`, gap: '4px' }}>
-            {meta.numbering.flatMap((rowNums, r) => (
-              rowNums.map((num, c) => {
-                const cell = { ch: puzzle.grid[r][c], num, row: r, col: c };
-                const isActive = active.r === r && active.c === c;
-                const inActiveWord = (function(){ return (activeCoords || []).some(k => k.r === r && k.c === c); })();
-                const correctMark = correctness ? correctness[r][c] : null;
-
-                if (puzzle.grid[r][c] === '#') {
-                  return <div key={`b-${r}-${c}`} className="bg-neutral-900 rounded-md" />;
-                }
-                return (
-                  <MiniCell
-                    key={`p-${r}-${c}`}
-                    cell={cell}
-                    isActive={isActive}
-                    inActiveWord={inActiveWord}
-                    userCh={userGrid[r][c] === '#' ? '' : userGrid[r][c]}
-                    correct={correctMark}
-                    onClick={() => handleCellClick(r, c)}
-                  />
-                );
-              })
-            ))}
-          </div>
-          <div className="mt-2 text-xs text-neutral-500">Tip: Type letters. Space = toggle direction. Enter = next clue. Arrows = move.</div>
-        </div>
-      );
-
-      const header = (
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">{puzzle.title || 'Mini Crossword'}</h1>
-            <div className="text-sm text-neutral-500">{puzzle.author ? `by ${puzzle.author}` : ''} {puzzle.date ? `· ${puzzle.date}` : ''}</div>
-          </div>
-          <Controls
-            onClear={clearAll}
-            onCheck={check}
-            onRevealRun={revealRun}
-            onRevealAll={revealAll}
-            onImport={onImport}
-            onExport={onExport}
-          />
-        </div>
-      );
+        return mark;
+      }, [checked, userGrid, puz.grid]);
 
       return (
         <div className="p-6 max-w-5xl mx-auto">
-          {header}
-          <div className="mt-6 grid grid-cols-1 lg:grid-cols-[minmax(0,400px)_1fr] gap-8 items-start">
-            {gridUI}
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold">Mini Crossword</h1>
+              <div className="text-sm text-neutral-500">by Rosh • {level}</div>
+            </div>
+            <Controls
+              timeLeft={timeLeft}
+              disabled={timeUp || solved}
+              level={level}
+              setLevel={(lvl)=>{ setLevel(lvl); setSeed(Math.random()); }}
+              onNew={newPuzzle}
+              onClear={clearAll}
+              onCheck={check}
+              onRevealRun={revealRun}
+              onRevealAll={revealAll}
+              onImport={(txt)=>{ try{ const obj=JSON.parse(txt); if(!obj.id) obj.id=`import-${Date.now()}`; if(!obj.size||obj.grid?.length!==obj.size) throw new Error("Grid size mismatch"); const m={...obj, meta: generateMeta(obj.grid)}; setSeed(Math.random()); setPuz(m); setUserGrid(emptyUserGridFrom(obj.grid)); setChecked(false); setTimeLeft(600); setTimeUp(false); setSolved(false);}catch(e){ alert("Import failed: " + e.message); } }}
+              onExport={()=>{ const data=JSON.stringify({ id:puz.id, title:puz.title, author:puz.author, date:puz.date, size:puz.size, grid:puz.grid, clues:puz.clues }, null, 2); const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([data],{type:"application/json"})); a.download=`${puz.title||puz.id}.json`; a.click(); }}
+            />
+          </div>
+
+          <div ref={gridRef} tabIndex={0} className="mt-6 grid grid-cols-1 lg:grid-cols-[minmax(0,400px)_1fr] gap-8 items-start outline-none"
+               onKeyDown={(e)=>{ if(e.key===' ') e.preventDefault(); }}>
+            <div>
+              <div className="grid" style={{ gridTemplateColumns: `repeat(${puz.meta.N}, minmax(0, 1fr))`, gap: '4px' }}>
+                {puz.meta.numbering.flatMap((rowNums, r) =>
+                  rowNums.map((num, c) => {
+                    const cell = { ch: puz.grid[r][c], num, row: r, col: c };
+                    const isActive = active.r === r && active.c === c;
+                    const inActiveWord = (coordsOfRun(getCurrentRun(puz.meta, dir, active.r, active.c), dir) || []).some(k => k.r===r && k.c===c);
+                    const mark = correctness ? correctness[r][c] : null;
+                    return (
+                      cell.ch==="#"
+                        ? <div key={`b-${r}-${c}`} className="bg-neutral-900 rounded-md" />
+                        : <MiniCell
+                            key={`p-${r}-${c}`}
+                            cell={cell}
+                            isActive={isActive}
+                            inActiveWord={inActiveWord}
+                            userCh={userGrid[r][c]==="#" ? '' : userGrid[r][c]}
+                            correct={mark}
+                            disabled={timeUp || solved}
+                            onClick={()=>{
+                              if (puz.grid[r][c] === '#') return;
+                              if (timeUp || solved) return;
+                              if (active.r === r && active.c === c) setDir(d=>d===DIRS.ACROSS?DIRS.DOWN:DIRS.ACROSS);
+                              else setActive({ r, c });
+                            }}
+                          />
+                    );
+                  })
+                )}
+              </div>
+              <div className="mt-2 text-xs text-neutral-500">Type letters. Space = toggle direction. Enter = next clue. Arrows = move.</div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ClueList title="Across" runs={meta.across} cluesMap={puzzle.clues?.across || {}} activeNumber={null} onSelect={()=>{}} />
-              <ClueList title="Down" runs={meta.down} cluesMap={puzzle.clues?.down || {}} activeNumber={null} onSelect={()=>{}} />
+              <div>
+                <h3 className="text-sm uppercase tracking-wide text-neutral-500 mb-2">Across</h3>
+                <div className="space-y-1">
+                  {puz.meta.across.map(run=>{
+                    const clue = puz.clues?.across?.[run.number] || "(clue)";
+                    return (
+                      <div key={`A-${run.number}`} className="px-3 py-2 rounded-md border bg-white">
+                        <div className="text-[11px] text-neutral-500">{run.number}</div>
+                        <div className="text-sm leading-snug">{clue}</div>
+                        <div className="text-[11px] text-neutral-400 mt-0.5">{run.length} letters</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm uppercase tracking-wide text-neutral-500 mb-2">Down</h3>
+                <div className="space-y-1">
+                  {puz.meta.down.map(run=>{
+                    const clue = puz.clues?.down?.[run.number] || "(clue)";
+                    return (
+                      <div key={`D-${run.number}`} className="px-3 py-2 rounded-md border bg-white">
+                        <div className="text-[11px] text-neutral-500">{run.number}</div>
+                        <div className="text-sm leading-snug">{clue}</div>
+                        <div className="text-[11px] text-neutral-400 mt-0.5">{run.length} letters</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
+
+          {timeUp && (
+            <Overlay
+              title="Time’s up!"
+              subtitle="Reveal the grid or try a fresh one."
+              primary={<button className="px-4 py-2 rounded-md bg-indigo-600 text-white" onClick={()=>setUserGrid(puz.grid.map(r=>r.replace(/#/g,'#')))}>Reveal solution</button>}
+              secondary={<button className="px-4 py-2 rounded-md border" onClick={()=>setSeed(Math.random())}>New puzzle</button>}
+            />
+          )}
+          {(!timeUp && solved) && (
+            <Overlay
+              title="Nice solve! 🎯"
+              subtitle={`Finished with ${pad(Math.floor(timeLeft/60))}:${pad(timeLeft%60)} left`}
+              primary={<button className="px-4 py-2 rounded-md bg-indigo-600 text-white" onClick={()=>setSeed(Math.random())}>New puzzle</button>}
+              secondary={<button className="px-4 py-2 rounded-md border" onClick={()=>{/* peek */}}>OK</button>}
+            />
+          )}
         </div>
       );
     }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<MiniCrosswordApp />);
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
 </body>
 </html>
