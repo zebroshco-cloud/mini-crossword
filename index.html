@@ -23,12 +23,11 @@
     const inBounds = (N, r, c) => r>=0 && r<N && c>=0 && c<N;
 
     // ---------- grid (single-word answers only) ----------
-    // Across runs (in order): LIMIT / AN / MI / STEAM / ER / GO / ROVER
-    // Down   runs (in order): LASER / INTRO / IMAGE / TIMOR
+    // Across: LIMIT / AN / MI / STEAM / ER / GO / ROVER
+    // Down:   LASER / INTRO / IMAGE / TIMOR
     const BASE_GRID = ["LIMIT","AN#MI","STEAM","ER#GO","ROVER"];
 
     // ---------- clue banks by difficulty ----------
-    // Each entry has multiple variants. A random variant is chosen per load.
     const CLUES = {
       easy: {
         across: [
@@ -192,7 +191,7 @@
         <div className="flex flex-wrap items-center gap-2">
           <div className="px-3 py-1 rounded-md border bg-white font-mono text-sm">⏱ {pad(mins)}:{pad(secs)}</div>
 
-          <!-- Difficulty selector -->
+          {/* Difficulty selector */}
           <div className="flex items-center gap-2">
             <span className="text-sm">Difficulty:</span>
             <select className="px-2 py-1 border rounded-md text-sm"
@@ -245,8 +244,12 @@
       // Difficulty (default Medium)
       const [level, setLevel] = useState("Medium");
 
-      // Build a fresh puzzle whenever the page loads, when level changes,
-      // or when "New puzzle" is clicked (we flip a seed).
+      // 10-minute timer state (declare before effects that use it)
+      const [timeLeft, setTimeLeft] = useState(600);
+      const [timeUp, setTimeUp] = useState(false);
+      const [solved, setSolved] = useState(false);
+
+      // Build a fresh puzzle whenever page loads, level changes, or "New puzzle"
       const [seed, setSeed] = useState(() => Math.random());
       const banks = CLUES[level.toLowerCase()];
       const puzzle = useMemo(() => materializePuzzle(BASE_GRID, banks), [seed, level]);
@@ -261,20 +264,16 @@
       });
       const [checked, setChecked] = useState(false);
 
-      // When puzzle changes (seed or level), reset play state
+      // When puzzle changes (seed or level), reset play state + timer
       useEffect(() => {
         setPuz(puzzle);
         setUserGrid(emptyUserGridFrom(puzzle.grid));
         setChecked(false);
-        for (let r=0; r<puzzle.meta.N; r++) for (let c=0; c<puzzle.meta.N; c++) if (puzzle.grid[r][c] !== "#") { setActive({ r, c }); r=puzzle.meta.N; break; }
+        outer: for (let r=0; r<puzzle.meta.N; r++) for (let c=0; c<puzzle.meta.N; c++) if (puzzle.grid[r][c] !== "#") { setActive({ r, c }); break outer; }
         setTimeLeft(600); setTimeUp(false); setSolved(false);
       }, [puzzle.id]);
 
-      // 10-minute timer
-      const [timeLeft, setTimeLeft] = useState(600);
-      const [timeUp, setTimeUp] = useState(false);
-      const [solved, setSolved] = useState(false);
-
+      // 10-minute ticking timer
       useEffect(() => {
         if (timeUp || solved) return;
         const t = setInterval(() => setTimeLeft(x => {
@@ -409,7 +408,7 @@
               timeLeft={timeLeft}
               disabled={timeUp || solved}
               level={level}
-              setLevel={(lvl)=>{ setLevel(lvl); setSeed(Math.random()); }}  // changing level also refreshes puzzle
+              setLevel={(lvl)=>{ setLevel(lvl); setSeed(Math.random()); }}
               onNew={newPuzzle}
               onClear={clearAll}
               onCheck={check}
@@ -423,7 +422,7 @@
           <div ref={gridRef} tabIndex={0} className="mt-6 grid grid-cols-1 lg:grid-cols-[minmax(0,400px)_1fr] gap-8 items-start outline-none"
                onKeyDown={(e)=>{ if(e.key===' ') e.preventDefault(); }}>
             <div>
-              <div className="grid" style={{ gridTemplateColumns: `repeat(${N}, minmax(0, 1fr))`, gap: '4px' }}>
+              <div className="grid" style={{ gridTemplateColumns: `repeat(${puz.meta.N}, minmax(0, 1fr))`, gap: '4px' }}>
                 {puz.meta.numbering.flatMap((rowNums, r) =>
                   rowNums.map((num, c) => {
                     const cell = { ch: puz.grid[r][c], num, row: r, col: c };
