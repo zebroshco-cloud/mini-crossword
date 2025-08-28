@@ -3,13 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Mini Crossword</title>
-  <!-- Tailwind (Play CDN) -->
+  <title>Hard Mini Crossword</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React + ReactDOM from CDN -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <!-- Babel for in-browser JSX transform -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="bg-white text-neutral-900">
@@ -18,161 +15,217 @@
   <script type="text/babel">
     const { useMemo, useState, useEffect, useRef } = React;
 
-    // --- Utilities ---
+    // ---------- helpers ----------
     const clone = (x) => JSON.parse(JSON.stringify(x));
     const DIRS = { ACROSS: "across", DOWN: "down" };
-    const pad = (n)=> (n<10 ? "0"+n : ""+n);
+    const pad = (n) => (n < 10 ? "0" + n : "" + n);
+    const setCharAt = (str, i, ch) => str.substring(0, i) + ch + str.substring(i + 1);
+    const inBounds = (N, r, c) => r>=0 && r<N && c>=0 && c<N;
 
-    // --- Puzzle bank (English-only). Two clue sets rotate on refresh. ---
-    // Grid pattern (5x5):
-    // LIMIT
-    // AN#MI
-    // STEAM
-    // ER#GO
-    // ROVER
-    //
-    // Downs: LASER / INTRO / IMAGE / TIMOR
-    const PUZZLE_BANK = [
-      {
-        id: "limit-steam-v1",
-        title: "Daily Mini",
-        author: "Rosh",
-        date: "",
-        size: 5,
-        grid: ["LIMIT","AN#MI","STEAM","ER#GO","ROVER"],
-        clues: {
-          across: {
-            "1": "Cap; constrain",
-            "6": "Indefinite article",
-            "7": "Note between ‘re’ and ‘fa’",
-            "8": "Power for old locomotives",
-            "9": "Hesitation sound",
-            "10": "Proceed",
-            "11": "Mars explorer, e.g."
-          },
-          down: {
-            "1": "Barcode scanner beam",
-            "2": "Album opener",
-            "3": "Picture",
-            "4": "Eastern half of a Southeast Asian island"
-          }
-        }
-      },
-      {
-        id: "limit-steam-v2",
-        title: "Daily Mini",
-        author: "Rosh",
-        date: "",
-        size: 5,
-        grid: ["LIMIT","AN#MI","STEAM","ER#GO","ROVER"],
-        clues: {
-          across: {
-            "1": "Upper bound",
-            "6": "Grammar bit before a vowel sound",
-            "7": "Sol-fa syllable after ‘re’",
-            "8": "Kettle output",
-            "9": "“Uh …” cousin",
-            "10": "Get moving",
-            "11": "Curiosity, for one"
-          },
-          down: {
-            "1": "Cutting-edge beam",
-            "2": "Track zero on some albums",
-            "3": "Likeness",
-            "4": "____-Leste (country in Asia)"
-          }
-        }
-      }
-    ];
+    // ---------- grid + clue options ----------
+    // This grid uses only single-word entries (no spaces).
+    // Across runs (in order): LIMIT / AN / MI / STEAM / ER / GO / ROVER
+    // Down   runs (in order): LASER / INTRO / IMAGE / TIMOR
+    const BASE_GRID = ["LIMIT","AN#MI","STEAM","ER#GO","ROVER"];
 
-    // --- Crossword mechanics (unchanged core) ---
+    // Harder clue options — each entry has several variants.
+    // On every load we pick one at random per entry, so clues change each refresh.
+    const CLUE_OPTIONS = {
+      across: [
+        // LIMIT
+        [
+          "Upper bound", 
+          "Cap imposed by policy", 
+          "What a governor may set"
+        ],
+        // AN
+        [
+          "Indefinite article before a vowel sound",
+          "One, in grammar",
+          "Article heard before “hour”"
+        ],
+        // MI
+        [
+          "Solfège after “re”",
+          "Note between re and fa",
+          "Third tone of a major scale (solfège)"
+        ],
+        // STEAM
+        [
+          "Pressure that builds", 
+          "Power for pistons of old",
+          "What whistles from a kettle"
+        ],
+        // ER
+        [
+          "Filler in a falter", 
+          "Hesitation syllable",
+          "Sound from a stammerer"
+        ],
+        // GO
+        [
+          "Green light", 
+          "Leave the starting line",
+          "Proceed"
+        ],
+        // ROVER
+        [
+          "Curiosity, for one", 
+          "Wanderer", 
+          "NASA machine on Mars"
+        ]
+      ],
+      down: [
+        // LASER
+        [
+          "Coherent cutter", 
+          "Barcode line at checkout", 
+          "Surgical beam"
+        ],
+        // INTRO
+        [
+          "Lead-in before verse", 
+          "Album opener", 
+          "Prologue’s shorter cousin"
+        ],
+        // IMAGE
+        [
+          "Public persona", 
+          "Screen icon, broadly", 
+          "Likeness"
+        ],
+        // TIMOR
+        [
+          "Island of ____-Leste", 
+          "Half of a nation with “East”", 
+          "Southeast Asian island split with Indonesia"
+        ]
+      ]
+    };
+
+    // ---------- crossword mechanics ----------
+    const nextCell = ({ N, grid, r, c, dir }) => {
+      const step = dir === "across" ? [0,1] : [1,0];
+      let nr = r + step[0], nc = c + step[1];
+      while (inBounds(N, nr, nc) && grid[nr][nc] === "#") { nr += step[0]; nc += step[1]; }
+      return inBounds(N, nr, nc) ? { r: nr, c: nc } : null;
+    };
+    const prevCell = ({ N, grid, r, c, dir }) => {
+      const step = dir === "across" ? [0,-1] : [-1,0];
+      let nr = r + step[0], nc = c + step[1];
+      while (inBounds(N, nr, nc) && grid[nr][nc] === "#") { nr += step[0]; nc += step[1]; }
+      return inBounds(N, nr, nc) ? { r: nr, c: nc } : null;
+    };
+    const emptyUserGridFrom = (grid) => grid.map(row => row.replace(/[^#]/g, " "));
+
     function generateMeta(grid) {
       const N = grid.length;
       const numbering = Array.from({ length: N }, () => Array(N).fill(null));
       let num = 0;
-      for (let r = 0; r < N; r++) {
-        for (let c = 0; c < N; c++) {
+
+      // numbering: give a number to any cell that starts an across and/or a down answer
+      for (let r=0; r<N; r++) {
+        for (let c=0; c<N; c++) {
           const ch = grid[r][c];
-          if (ch !== "#") {
-            const startA = (c===0 || grid[r][c-1]==="#") && c+1<N && grid[r][c+1]!=="#";
-            const startD = (r===0 || grid[r-1][c]==="#") && r+1<N && grid[r+1][c]!=="#";
-            if (startA || startD) numbering[r][c] = ++num;
-          }
+          if (ch === "#") continue;
+          const startsAcross = (c===0 || grid[r][c-1]==="#") && c+1<N && grid[r][c+1]!=="#";
+          const startsDown   = (r===0 || grid[r-1][c]==="#") && r+1<N && grid[r+1][c]!=="#";
+          if (startsAcross || startsDown) numbering[r][c] = ++num;
         }
       }
-      const across=[], down=[];
-      for (let r=0;r<N;r++){
+
+      // across runs
+      const across = [];
+      for (let r=0; r<N; r++) {
         let c=0;
-        while(c<N){
-          if (grid[r][c]!=="#" && (c===0 || grid[r][c-1]==="#")){
-            const start=c; let s="";
-            while(c<N && grid[r][c]!=="#"){ s+=grid[r][c]; c++; }
-            if (s.length>1) across.push({ number:numbering[r][start], row:r, col:start, length:s.length, answer:s });
+        while (c < N) {
+          if (grid[r][c] !== "#" && (c===0 || grid[r][c-1]==="#")) {
+            const startC = c; let s="";
+            while (c < N && grid[r][c] !== "#") { s += grid[r][c]; c++; }
+            if (s.length > 1) across.push({ number: numbering[r][startC], row:r, col:startC, length:s.length, answer:s });
           } else c++;
         }
       }
-      for (let c=0;c<N;c++){
+
+      // down runs
+      const down = [];
+      for (let c=0; c<N; c++) {
         let r=0;
-        while(r<N){
-          if (grid[r][c]!=="#" && (r===0 || grid[r-1][c]==="#")){
-            const start=r; let s="";
-            while(r<N && grid[r][c]!=="#"){ s+=grid[r][c]; r++; }
-            if (s.length>1) down.push({ number:numbering[start][c], row:start, col:c, length:s.length, answer:s });
+        while (r < N) {
+          if (grid[r][c] !== "#" && (r===0 || grid[r-1][c]==="#")) {
+            const startR = r; let s="";
+            while (r < N && grid[r][c] !== "#") { s += grid[r][c]; r++; }
+            if (s.length > 1) down.push({ number: numbering[startR][c], row:startR, col:c, length:s.length, answer:s });
           } else r++;
         }
       }
       return { N, numbering, across, down };
     }
-    const emptyUserGridFrom = (grid) => grid.map((row) => row.replace(/[^#]/g, " "));
-    const setCharAt = (str, idx, ch) => str.substring(0, idx) + ch + str.substring(idx + 1);
-    const inBounds = (N, r, c) => r>=0 && r<N && c>=0 && c<N;
-    const nextCell = ({ N, grid, r, c, dir }) => {
-      const step = dir==="across" ? [0,1] : [1,0];
-      let nr=r+step[0], nc=c+step[1];
-      while (inBounds(N,nr,nc) && grid[nr][nc]==="#") { nr+=step[0]; nc+=step[1]; }
-      return inBounds(N,nr,nc) ? { r:nr, c:nc } : null;
-    };
-    const prevCell = ({ N, grid, r, c, dir }) => {
-      const step = dir==="across" ? [0,-1] : [-1,0];
-      let nr=r+step[0], nc=c+step[1];
-      while (inBounds(N,nr,nc) && grid[nr][nc]==="#") { nr+=step[0]; nc+=step[1]; }
-      return inBounds(N,nr,nc) ? { r:nr, c:nc } : null;
-    };
 
-    function usePuzzle(initialPuzzle) {
-      const [puzzle, setPuzzle] = useState(() => clone(initialPuzzle));
-      const meta = useMemo(() => generateMeta(puzzle.grid), [puzzle.grid]);
-      const [userGrid, setUserGrid] = useState(() => emptyUserGridFrom(puzzle.grid));
+    // build randomized clues (hard) on each load
+    function materializePuzzle(grid, options) {
+      const meta = generateMeta(grid);
+      const randFrom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+      const acrossClues = {};
+      const downClues   = {};
+
+      // Ensure we have the same count
+      if (options.across.length !== meta.across.length || options.down.length !== meta.down.length) {
+        console.warn("Clue option count mismatch; falling back to first options when needed.");
+      }
+
+      meta.across.forEach((run, i) => {
+        const pool = (options.across[i] || [String(run.answer)]);
+        acrossClues[run.number] = randFrom(pool);
+      });
+      meta.down.forEach((run, i) => {
+        const pool = (options.down[i] || [String(run.answer)]);
+        downClues[run.number] = randFrom(pool);
+      });
+
+      return {
+        id: "hard-mini-" + Math.floor(Math.random()*1e9),
+        title: "Hard Mini",
+        author: "Rosh",
+        date: "",
+        size: grid.length,
+        grid: grid.slice(),
+        clues: { across: acrossClues, down: downClues },
+        meta
+      };
+    }
+
+    // ---------- React hooks ----------
+    function usePuzzle(initialGrid, options) {
+      const [puz, setPuz] = useState(() => materializePuzzle(initialGrid, options));
+      const [userGrid, setUserGrid] = useState(() => emptyUserGridFrom(puz.grid));
       const [dir, setDir] = useState(DIRS.ACROSS);
-      const [active, setActive] = useState(() => ({ r:0, c:0 }));
+      const [active, setActive] = useState(() => {
+        for (let r=0; r<puz.meta.N; r++) for (let c=0; c<puz.meta.N; c++) if (puz.grid[r][c] !== "#") return { r, c };
+        return { r:0, c:0 };
+      });
       const [checked, setChecked] = useState(false);
-      useEffect(() => {
-        setUserGrid(emptyUserGridFrom(puzzle.grid));
-        setChecked(false);
-        // focus first non-block
-        outer: for (let r=0;r<meta.N;r++) for (let c=0;c<meta.N;c++) if (puzzle.grid[r][c]!=="#"){ setActive({r,c}); break outer; }
-      }, [puzzle.id]);
-      return { puzzle, setPuzzle, meta, userGrid, setUserGrid, dir, setDir, active, setActive, checked, setChecked };
+
+      useEffect(() => { setUserGrid(emptyUserGridFrom(puz.grid)); setChecked(false); }, [puz.id]);
+
+      return { puz, setPuz, userGrid, setUserGrid, dir, setDir, active, setActive, checked, setChecked };
     }
 
     function getCurrentRun(meta, dir, r, c) {
-      const runs = dir===DIRS.ACROSS ? meta.across : meta.down;
+      const runs = dir === DIRS.ACROSS ? meta.across : meta.down;
       for (const run of runs) {
-        if (dir===DIRS.ACROSS) {
-          if (r===run.row && c>=run.col && c<run.col+run.length) return run;
+        if (dir === DIRS.ACROSS) {
+          if (r === run.row && c >= run.col && c < run.col + run.length) return run;
         } else {
-          if (c===run.col && r>=run.row && r<run.row+run.length) return run;
+          if (c === run.col && r >= run.row && r < run.row + run.length) return run;
         }
       }
       return null;
     }
-    const coordsOfRun = (run, dir) => {
-      if (!run) return [];
-      return Array.from({length: run.length}, (_,i) =>
-        dir===DIRS.ACROSS ? { r: run.row, c: run.col+i } : { r: run.row+i, c: run.col }
-      );
-    };
+    const coordsOfRun = (run, dir) => run ? Array.from({length: run.length}, (_,i)=> dir===DIRS.ACROSS ? {r:run.row,c:run.col+i} : {r:run.row+i,c:run.col}) : [];
 
+    // ---------- UI atoms ----------
     function MiniCell({ cell, isActive, inActiveWord, userCh, correct, disabled, onClick }) {
       if (cell.ch === "#") return <div className="bg-neutral-900 rounded-md" />;
       const base = "relative rounded-md border text-center flex items-center justify-center select-none aspect-square";
@@ -183,22 +236,19 @@
       const wrong = correct === false ? "bg-red-50" : "";
       const right = correct === true ? "bg-green-50" : "";
       return (
-        <button onClick={onClick} disabled={disabled}
-          className={`${base} ${color} ${wrong} ${right}`} aria-label={`Cell`}>
-          {cell.num && (<span className="absolute top-0.5 left-1 text-[10px] text-neutral-500 select-none">{cell.num}</span>)}
-          <span className="text-xl font-semibold tracking-wide">{(userCh || " ")}</span>
+        <button onClick={onClick} disabled={disabled} className={`${base} ${color} ${wrong} ${right}`} aria-label="cell">
+          {cell.num && <span className="absolute top-0.5 left-1 text-[10px] text-neutral-500 select-none">{cell.num}</span>}
+          <span className="text-xl font-semibold">{userCh || " "}</span>
         </button>
       );
     }
 
-    function Controls({ onClear, onCheck, onRevealRun, onRevealAll, onImport, onExport, onNew, timeLeft, disabled }) {
+    function Controls({ timeLeft, disabled, onNew, onClear, onCheck, onRevealRun, onRevealAll, onImport, onExport }) {
       const [importText, setImportText] = useState("");
       const mins = Math.floor(timeLeft/60), secs = timeLeft%60;
       return (
         <div className="flex flex-wrap items-center gap-2">
-          <div className="px-3 py-1 rounded-md border bg-white font-mono text-sm">
-            ⏱ {pad(mins)}:{pad(secs)}
-          </div>
+          <div className="px-3 py-1 rounded-md border bg-white font-mono text-sm">⏱ {pad(mins)}:{pad(secs)}</div>
           <button className="px-3 py-1 rounded-md border bg-white" onClick={onNew}>New puzzle</button>
           <div className="w-px h-6 bg-neutral-300 mx-1" />
           <button className="px-3 py-1 rounded-md border bg-white" onClick={onClear} disabled={disabled}>Clear</button>
@@ -235,78 +285,74 @@
       );
     }
 
-    function MiniCrosswordApp() {
-      // pick a random English puzzle on load
-      const [seed] = useState(() => Math.random());
-      const startIndex = Math.floor(seed * PUZZLE_BANK.length) % PUZZLE_BANK.length;
-      const [puzzleIndex, setPuzzleIndex] = useState(startIndex);
-      const basePuzzle = PUZZLE_BANK[puzzleIndex];
+    // ---------- App ----------
+    function App() {
+      // materialize a fresh puzzle (random clues) on each load
+      const [puzStateSeed, setPuzStateSeed] = useState(() => Math.random());
+      const initialPuzzle = useMemo(() => materializePuzzle(BASE_GRID, CLUE_OPTIONS), [puzStateSeed]);
 
-      const { puzzle, setPuzzle, meta, userGrid, setUserGrid, dir, setDir, active, setActive, checked, setChecked } = usePuzzle(basePuzzle);
+      const { puz, setPuz, userGrid, setUserGrid, dir, setDir, active, setActive, checked, setChecked } =
+        usePuzzle(initialPuzzle.grid, CLUE_OPTIONS);
+      useEffect(() => { setPuz(initialPuzzle); }, [initialPuzzle.id]);
 
-      // 10-minute countdown
-      const [timeLeft, setTimeLeft] = useState(600);        // 600s = 10:00
+      // 10-min timer
+      const [timeLeft, setTimeLeft] = useState(600);
       const [timeUp, setTimeUp] = useState(false);
       const [solved, setSolved] = useState(false);
 
-      // tick timer
       useEffect(() => {
         if (timeUp || solved) return;
         const t = setInterval(() => setTimeLeft(x => {
           if (x <= 1) { clearInterval(t); setTimeUp(true); return 0; }
-          return x-1;
+          return x - 1;
         }), 1000);
         return () => clearInterval(t);
       }, [timeUp, solved]);
 
-      // detect solved
+      // recompute solved
       useEffect(() => {
-        const N = meta.N;
-        for (let r=0;r<N;r++){
-          for (let c=0;c<N;c++){
-            const sol = puzzle.grid[r][c];
-            const usr = userGrid[r][c];
-            if (sol === '#') continue;
-            if (usr !== sol) { setSolved(false); return; }
-          }
+        const N = puz.meta.N;
+        for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
+          const sol = puz.grid[r][c], usr = userGrid[r][c];
+          if (sol === "#") continue;
+          if (usr !== sol) { setSolved(false); return; }
         }
         setSolved(true);
-      }, [userGrid, puzzle.grid]);
+      }, [userGrid, puz.grid]);
 
-      const N = meta.N;
-      const activeRun = getCurrentRun(meta, dir, active.r, active.c);
+      const N = puz.meta.N;
+      const activeRun = getCurrentRun(puz.meta, dir, active.r, active.c);
       const activeCoords = coordsOfRun(activeRun, dir);
       const gridRef = useRef(null);
 
-      // keyboard play (disabled if timeUp or solved)
+      // keyboard
       useEffect(() => {
         const el = gridRef.current; if (!el) return;
         const handler = (e) => {
           if (timeUp || solved) return;
           if (!el.contains(document.activeElement)) return;
-          const key = e.key;
-          if (/^[a-zA-Z]$/.test(key)) {
+          const k = e.key;
+          if (/^[a-zA-Z]$/.test(k)) {
             e.preventDefault();
-            if (puzzle.grid[active.r][active.c] === '#') return;
+            if (puz.grid[active.r][active.c] === "#") return;
             const next = [...userGrid];
-            next[active.r] = setCharAt(next[active.r], active.c, key.toUpperCase());
-            setUserGrid(next);
-            setChecked(false);
-            const nxt = nextCell({ N, grid: puzzle.grid, r: active.r, c: active.c, dir });
+            next[active.r] = setCharAt(next[active.r], active.c, k.toUpperCase());
+            setUserGrid(next); setChecked(false);
+            const nxt = nextCell({ N, grid: puz.grid, r: active.r, c: active.c, dir });
             if (nxt) setActive(nxt);
             return;
           }
-          if (key === 'Backspace') {
+          if (k === "Backspace") {
             e.preventDefault();
             const next = [...userGrid];
-            const has = userGrid[active.r][active.c] !== ' ' && puzzle.grid[active.r][active.c] !== '#';
+            const has = userGrid[active.r][active.c] !== " " && puz.grid[active.r][active.c] !== "#";
             if (has) {
-              next[active.r] = setCharAt(next[active.r], active.c, ' ');
+              next[active.r] = setCharAt(next[active.r], active.c, " ");
               setUserGrid(next);
             } else {
-              const prv = prevCell({ N, grid: puzzle.grid, r: active.r, c: active.c, dir });
+              const prv = prevCell({ N, grid: puz.grid, r: active.r, c: active.c, dir });
               if (prv) {
-                next[prv.r] = setCharAt(next[prv.r], prv.c, ' ');
+                next[prv.r] = setCharAt(next[prv.r], prv.c, " ");
                 setUserGrid(next);
                 setActive(prv);
               }
@@ -314,10 +360,10 @@
             setChecked(false);
             return;
           }
-          if (key === ' ') { e.preventDefault(); setDir(d => d===DIRS.ACROSS ? DIRS.DOWN : DIRS.ACROSS); return; }
-          if (key === 'Enter') {
+          if (k === " ") { e.preventDefault(); setDir(d => d===DIRS.ACROSS ? DIRS.DOWN : DIRS.ACROSS); return; }
+          if (k === "Enter") {
             e.preventDefault();
-            const runs = dir === DIRS.ACROSS ? meta.across : meta.down;
+            const runs = dir===DIRS.ACROSS ? puz.meta.across : puz.meta.down;
             if (!activeRun) return;
             const idx = runs.findIndex(r => r.number === activeRun.number);
             const nextRun = runs[(idx + 1) % runs.length];
@@ -328,89 +374,78 @@
             e.preventDefault();
             const nr = Math.max(0, Math.min(N - 1, active.r + dr));
             const nc = Math.max(0, Math.min(N - 1, active.c + dc));
-            if (puzzle.grid[nr][nc] !== '#') setActive({ r: nr, c: nc });
+            if (puz.grid[nr][nc] !== "#") setActive({ r: nr, c: nc });
           };
-          if (key === 'ArrowUp') return mv(-1, 0);
-          if (key === 'ArrowDown') return mv(1, 0);
-          if (key === 'ArrowLeft') return mv(0, -1);
-          if (key === 'ArrowRight') return mv(0, 1);
+          if (k === "ArrowUp") return mv(-1,0);
+          if (k === "ArrowDown") return mv(1,0);
+          if (k === "ArrowLeft") return mv(0,-1);
+          if (k === "ArrowRight") return mv(0,1);
         };
-        document.addEventListener('keydown', handler);
-        return () => document.removeEventListener('keydown', handler);
-      }, [active, dir, userGrid, puzzle.grid, meta, timeUp, solved]);
+        document.addEventListener("keydown", handler);
+        return () => document.removeEventListener("keydown", handler);
+      }, [active, dir, userGrid, puz.grid, puz.meta, timeUp, solved]);
 
       // actions
-      const clearAll = () => { if (timeUp) return; setUserGrid(emptyUserGridFrom(puzzle.grid)); setChecked(false); };
-      const check = () => { if (timeUp) return; setChecked(true); };
+      const clearAll  = () => { if (timeUp) return; setUserGrid(emptyUserGridFrom(puz.grid)); setChecked(false); };
+      const check     = () => { if (timeUp) return; setChecked(true); };
       const revealRun = () => {
         if (!activeRun) return;
         const { row, col, length } = activeRun;
         const next = [...userGrid];
-        if (dir === DIRS.ACROSS) {
-          for (let i=0;i<length;i++) next[row] = setCharAt(next[row], col+i, puzzle.grid[row][col+i]);
-        } else {
-          for (let i=0;i<length;i++) next[row+i] = setCharAt(next[row+i], col, puzzle.grid[row+i][col]);
-        }
+        if (dir === DIRS.ACROSS) for (let i=0;i<length;i++) next[row] = setCharAt(next[row], col+i, puz.grid[row][col+i]);
+        else                      for (let i=0;i<length;i++) next[row+i] = setCharAt(next[row+i], col, puz.grid[row+i][col]);
         setUserGrid(next);
       };
-      const revealAll = () => setUserGrid(puzzle.grid.map(r => r.replace(/#/g, '#')));
+      const revealAll = () => setUserGrid(puz.grid.map(r => r.replace(/#/g, '#')));
       const newPuzzle = () => {
-        const next = (puzzleIndex + 1 + Math.floor(Math.random()*PUZZLE_BANK.length)) % PUZZLE_BANK.length;
-        setPuzzle(clone(PUZZLE_BANK[next]));
-        setPuzzleIndex(next);
-        setUserGrid(emptyUserGridFrom(PUZZLE_BANK[next].grid));
-        setTimeLeft(600); setTimeUp(false); setSolved(false); setChecked(false);
+        // New random clues (and a fresh timer)
+        setPuz(materializePuzzle(BASE_GRID, CLUE_OPTIONS));
+        setUserGrid(emptyUserGridFrom(BASE_GRID));
+        setChecked(false); setTimeLeft(600); setTimeUp(false); setSolved(false);
       };
 
-      // UI bits
       const correctness = useMemo(() => {
         if (!checked) return null;
         const mark = Array.from({ length: N }, () => Array(N).fill(null));
-        for (let r=0;r<N;r++){
-          for (let c=0;c<N;c++){
-            const sol = puzzle.grid[r][c];
-            const usr = userGrid[r][c];
-            if (sol === '#') { mark[r][c] = null; continue; }
-            if (usr === ' ') { mark[r][c] = false; continue; }
-            mark[r][c] = usr === sol;
-          }
+        for (let r=0;r<N;r++) for (let c=0;c<N;c++) {
+          const sol = puz.grid[r][c], usr = userGrid[r][c];
+          if (sol === "#") { mark[r][c] = null; continue; }
+          if (usr === " ") { mark[r][c] = false; continue; }
+          mark[r][c] = usr === sol;
         }
         return mark;
-      }, [checked, userGrid, puzzle.grid]);
-
-      const header = (
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">{puzzle.title || 'Mini Crossword'}</h1>
-            <div className="text-sm text-neutral-500">{puzzle.author ? `by ${puzzle.author}` : ''}</div>
-          </div>
-          <Controls
-            onClear={clearAll}
-            onCheck={check}
-            onRevealRun={revealRun}
-            onRevealAll={revealAll}
-            onImport={(text)=>{ try { const obj = JSON.parse(text); if (!obj.id) obj.id = `import-${Date.now()}`; if (!obj.size || obj.grid?.length !== obj.size) throw new Error('Grid size mismatch'); setPuzzle(obj); setTimeLeft(600); setTimeUp(false); setSolved(false); setChecked(false);} catch(e){ alert('Import failed: '+e.message); } }}
-            onExport={()=>{ const data = JSON.stringify(puzzle, null, 2); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' })); a.download = `${puzzle.title || puzzle.id}.json`; a.click(); }}
-            onNew={newPuzzle}
-            timeLeft={timeLeft}
-            disabled={timeUp || solved}
-          />
-        </div>
-      );
+      }, [checked, userGrid, puz.grid]);
 
       return (
         <div className="p-6 max-w-5xl mx-auto">
-          {header}
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold">Hard Mini</h1>
+              <div className="text-sm text-neutral-500">by Rosh</div>
+            </div>
+            <Controls
+              timeLeft={timeLeft}
+              disabled={timeUp || solved}
+              onNew={newPuzzle}
+              onClear={clearAll}
+              onCheck={check}
+              onRevealRun={revealRun}
+              onRevealAll={revealAll}
+              onImport={(txt)=>{ try{ const obj=JSON.parse(txt); if(!obj.id) obj.id=`import-${Date.now()}`; if(!obj.size||obj.grid?.length!==obj.size) throw new Error("Grid size mismatch"); setPuz({ ...obj, meta: generateMeta(obj.grid) }); setUserGrid(emptyUserGridFrom(obj.grid)); setChecked(false); setTimeLeft(600); setTimeUp(false); setSolved(false);}catch(e){ alert("Import failed: " + e.message); } }}
+              onExport={()=>{ const data=JSON.stringify({ id:puz.id, title:puz.title, author:puz.author, date:puz.date, size:puz.size, grid:puz.grid, clues:puz.clues }, null, 2); const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([data],{type:"application/json"})); a.download=`${puz.title||puz.id}.json`; a.click(); }}
+            />
+          </div>
+
           <div ref={gridRef} tabIndex={0} className="mt-6 grid grid-cols-1 lg:grid-cols-[minmax(0,400px)_1fr] gap-8 items-start outline-none"
                onKeyDown={(e)=>{ if(e.key===' ') e.preventDefault(); }}>
             <div>
               <div className="grid" style={{ gridTemplateColumns: `repeat(${N}, minmax(0, 1fr))`, gap: '4px' }}>
-                {meta.numbering.flatMap((rowNums, r) =>
+                {puz.meta.numbering.flatMap((rowNums, r) =>
                   rowNums.map((num, c) => {
-                    const cell = { ch: puzzle.grid[r][c], num, row: r, col: c };
+                    const cell = { ch: puz.grid[r][c], num, row: r, col: c };
                     const isActive = active.r === r && active.c === c;
-                    const inActiveWord = (activeCoords || []).some(k => k.r===r && k.c===c);
-                    const correctMark = correctness ? correctness[r][c] : null;
+                    const inActiveWord = (coordsOfRun(getCurrentRun(puz.meta, dir, active.r, active.c), dir) || []).some(k => k.r===r && k.c===c);
+                    const mark = correctness ? correctness[r][c] : null;
                     return (
                       cell.ch==="#"
                         ? <div key={`b-${r}-${c}`} className="bg-neutral-900 rounded-md" />
@@ -420,12 +455,12 @@
                             isActive={isActive}
                             inActiveWord={inActiveWord}
                             userCh={userGrid[r][c]==="#" ? '' : userGrid[r][c]}
-                            correct={correctMark}
+                            correct={mark}
                             disabled={timeUp || solved}
                             onClick={()=>{
-                              if (puzzle.grid[r][c] === '#') return;
+                              if (puz.grid[r][c] === '#') return;
                               if (timeUp || solved) return;
-                              if (active.r === r && active.c === c) setDir(d => d===DIRS.ACROSS ? DIRS.DOWN : DIRS.ACROSS);
+                              if (active.r === r && active.c === c) setDir(d=>d===DIRS.ACROSS?DIRS.DOWN:DIRS.ACROSS);
                               else setActive({ r, c });
                             }}
                           />
@@ -435,12 +470,13 @@
               </div>
               <div className="mt-2 text-xs text-neutral-500">Type letters. Space = toggle direction. Enter = next clue. Arrows = move.</div>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <h3 className="text-sm uppercase tracking-wide text-neutral-500 mb-2">Across</h3>
                 <div className="space-y-1">
-                  {meta.across.map(run=>{
-                    const clue = puzzle.clues?.across?.[run.number] || "(clue)";
+                  {puz.meta.across.map(run=>{
+                    const clue = puz.clues?.across?.[run.number] || "(clue)";
                     return (
                       <div key={`A-${run.number}`} className="px-3 py-2 rounded-md border bg-white">
                         <div className="text-[11px] text-neutral-500">{run.number}</div>
@@ -454,8 +490,8 @@
               <div>
                 <h3 className="text-sm uppercase tracking-wide text-neutral-500 mb-2">Down</h3>
                 <div className="space-y-1">
-                  {meta.down.map(run=>{
-                    const clue = puzzle.clues?.down?.[run.number] || "(clue)";
+                  {puz.meta.down.map(run=>{
+                    const clue = puz.clues?.down?.[run.number] || "(clue)";
                     return (
                       <div key={`D-${run.number}`} className="px-3 py-2 rounded-md border bg-white">
                         <div className="text-[11px] text-neutral-500">{run.number}</div>
@@ -469,18 +505,17 @@
             </div>
           </div>
 
-          {/* Overlays */}
           {timeUp && (
             <Overlay
               title="Time’s up!"
-              subtitle="Want to see the grid or try a new one?"
-              primary={<button className="px-4 py-2 rounded-md bg-indigo-600 text-white" onClick={()=>{ setUserGrid(puzzle.grid.map(r => r.replace(/#/g, '#'))); }}>Reveal solution</button>}
+              subtitle="Reveal the grid or try a fresh set of clues."
+              primary={<button className="px-4 py-2 rounded-md bg-indigo-600 text-white" onClick={()=>setUserGrid(puz.grid.map(r=>r.replace(/#/g,'#')))}>Reveal solution</button>}
               secondary={<button className="px-4 py-2 rounded-md border" onClick={newPuzzle}>New puzzle</button>}
             />
           )}
           {(!timeUp && solved) && (
             <Overlay
-              title="Nice solve! 🎉"
+              title="Nice solve! 🎯"
               subtitle={`Finished with ${pad(Math.floor(timeLeft/60))}:${pad(timeLeft%60)} left`}
               primary={<button className="px-4 py-2 rounded-md bg-indigo-600 text-white" onClick={newPuzzle}>New puzzle</button>}
               secondary={<button className="px-4 py-2 rounded-md border" onClick={()=>setChecked(true)}>Check grid</button>}
@@ -490,8 +525,7 @@
       );
     }
 
-    const root = ReactDOM.createRoot(document.getElementById("root"));
-    root.render(<MiniCrosswordApp />);
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
 </body>
 </html>
