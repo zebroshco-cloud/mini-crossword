@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title> Mini Crossword For Friends & Family - With Love</title>
+  <title>Crossword built with love for you | Rosh</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -22,85 +22,64 @@
     const setCharAt = (str, i, ch) => str.substring(0, i) + ch + str.substring(i + 1);
     const inBounds = (N, r, c) => r>=0 && r<N && c>=0 && c<N;
 
-    // ---------- grid + clue options ----------
-    // This grid uses only single-word entries (no spaces).
-    // Across runs (in order): LIMIT / AN / MI / STEAM / ER / GO / ROVER
-    // Down   runs (in order): LASER / INTRO / IMAGE / TIMOR
+    // ---------- grid (single-word answers only) ----------
+    // Across: LIMIT / AN / MI / STEAM / ER / GO / ROVER
+    // Down:   LASER / INTRO / IMAGE / TIMOR
     const BASE_GRID = ["LIMIT","AN#MI","STEAM","ER#GO","ROVER"];
 
-    // Harder clue options — each entry has several variants.
-    // On every load we pick one at random per entry, so clues change each refresh.
-    const CLUE_OPTIONS = {
-      across: [
-        // LIMIT
-        [
-          "Upper bound", 
-          "Cap imposed by policy", 
-          "What a governor may set"
+    // ---------- clue banks by difficulty ----------
+    const CLUES = {
+      easy: {
+        across: [
+          ["Upper limit","Cap","Maximum allowed"],
+          ["Indefinite article","Article before a vowel sound","Small word before 'hour'"],
+          ["Solfège note after 're'","Note between re and fa","Do-re-__"],
+          ["Power for old trains","Kettle output","Vapor from boiling water"],
+          ["Hesitation sound","Filler syllable","Stammer syllable"],
+          ["Green light","Permission to start","Proceed"],
+          ["Mars explorer, e.g.","Wandering dog’s name, often","NASA vehicle on Mars"]
         ],
-        // AN
-        [
-          "Indefinite article before a vowel sound",
-          "One, in grammar",
-          "Article heard before “hour”"
-        ],
-        // MI
-        [
-          "Solfège after “re”",
-          "Note between re and fa",
-          "Third tone of a major scale (solfège)"
-        ],
-        // STEAM
-        [
-          "Pressure that builds", 
-          "Power for pistons of old",
-          "What whistles from a kettle"
-        ],
-        // ER
-        [
-          "Filler in a falter", 
-          "Hesitation syllable",
-          "Sound from a stammerer"
-        ],
-        // GO
-        [
-          "Green light", 
-          "Leave the starting line",
-          "Proceed"
-        ],
-        // ROVER
-        [
-          "Curiosity, for one", 
-          "Wanderer", 
-          "NASA machine on Mars"
+        down: [
+          ["Barcode scanner beam","Surgical beam","Cutting light"],
+          ["Album opener","Prologue","Lead-in"],
+          ["Likeness","Picture","Public persona"],
+          ["____-Leste","Island split with Indonesia","Eastern half of a Southeast Asian island"]
         ]
-      ],
-      down: [
-        // LASER
-        [
-          "Coherent cutter", 
-          "Barcode line at checkout", 
-          "Surgical beam"
+      },
+      medium: {
+        across: [
+          ["Upper bound","Ceiling","Cap imposed by policy"],
+          ["Article heard before 'hour'","Grammar bit before a vowel sound","One, in grammar"],
+          ["Note between re and fa","Third tone in solfège","Scale syllable after 're'"],
+          ["Pressure that builds","Power for pistons of old","What whistles from a kettle"],
+          ["Falter filler","Hesitation syllable","Speaker’s stall"],
+          ["Get moving","Leave the starting line","Advance"],
+          ["Curiosity, for one","Wanderer","Red-planet vehicle"]
         ],
-        // INTRO
-        [
-          "Lead-in before verse", 
-          "Album opener", 
-          "Prologue’s shorter cousin"
-        ],
-        // IMAGE
-        [
-          "Public persona", 
-          "Screen icon, broadly", 
-          "Likeness"
-        ],
-        // TIMOR
-        [
-          "Island of ____-Leste", 
-          "Half of a nation with “East”", 
-          "Southeast Asian island split with Indonesia"
+        down: [
+          ["Coherent cutter","Checkout line reader","Surgical instrument, in a beam"],
+          ["Intro segment","Track zero, sometimes","Lead-in before verse"],
+          ["Image","Screen icon, broadly","Public face"],
+          ["Timor of ____-Leste","Island opposite 'West' in its name","Southeast Asian island with an East/West split"]
         ]
-      ]
+      },
+      hard: {
+        across: [
+          ["Limiter’s endpoint","Ceiling on growth","Policy cap"],
+          ["Clitic before a vowel sound","Vowel-led article","One, to grammarians"],
+          ["Tonic’s mediant, in solfège","Note nestled between re and fa","Third degree (solfège)"],
+          ["Expanding vapor","Piston propellant (antique)","Boiler output"],
+          ["Vocal stall","Dysfluency bit","Filler in a falter"],
+          ["Proceed signal","Leave the blocks","Advance from stop"],
+          ["Perseverance’s kin","Wanderer by design","Martian field vehicle"]
+        ],
+        down: [
+          ["Coherent light for cutting","Checkout scanner line","Laser scalpel, essentially"],
+          ["Paratext before the main","Opening track, sometimes","Front matter in brief"],
+          ["Persona to the public","Simulacrum","Cast image"],
+          ["Island in a hyphenated nation","The '—Leste' of a country name","Half of a state across from West Nusa Tenggara"]
+        ]
+      }
     };
 
     // ---------- crossword mechanics ----------
@@ -123,7 +102,6 @@
       const numbering = Array.from({ length: N }, () => Array(N).fill(null));
       let num = 0;
 
-      // numbering: give a number to any cell that starts an across and/or a down answer
       for (let r=0; r<N; r++) {
         for (let c=0; c<N; c++) {
           const ch = grid[r][c];
@@ -134,7 +112,6 @@
         }
       }
 
-      // across runs
       const across = [];
       for (let r=0; r<N; r++) {
         let c=0;
@@ -147,7 +124,6 @@
         }
       }
 
-      // down runs
       const down = [];
       for (let c=0; c<N; c++) {
         let r=0;
@@ -162,31 +138,25 @@
       return { N, numbering, across, down };
     }
 
-    // build randomized clues (hard) on each load
-    function materializePuzzle(grid, options) {
+    function materializePuzzle(grid, banks) {
       const meta = generateMeta(grid);
-      const randFrom = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      const pick = (arr) => arr[Math.floor(Math.random()*arr.length)];
 
       const acrossClues = {};
       const downClues   = {};
 
-      // Ensure we have the same count
-      if (options.across.length !== meta.across.length || options.down.length !== meta.down.length) {
-        console.warn("Clue option count mismatch; falling back to first options when needed.");
-      }
-
       meta.across.forEach((run, i) => {
-        const pool = (options.across[i] || [String(run.answer)]);
-        acrossClues[run.number] = randFrom(pool);
+        const pool = (banks.across[i] || [String(run.answer)]);
+        acrossClues[run.number] = pick(pool);
       });
       meta.down.forEach((run, i) => {
-        const pool = (options.down[i] || [String(run.answer)]);
-        downClues[run.number] = randFrom(pool);
+        const pool = (banks.down[i] || [String(run.answer)]);
+        downClues[run.number] = pick(pool);
       });
 
       return {
-        id: "hard-mini-" + Math.floor(Math.random()*1e9),
-        title: "Hard Mini",
+        id: "mini-" + Math.floor(Math.random()*1e9),
+        title: "Mini Crossword",
         author: "Rosh",
         date: "",
         size: grid.length,
@@ -195,35 +165,6 @@
         meta
       };
     }
-
-    // ---------- React hooks ----------
-    function usePuzzle(initialGrid, options) {
-      const [puz, setPuz] = useState(() => materializePuzzle(initialGrid, options));
-      const [userGrid, setUserGrid] = useState(() => emptyUserGridFrom(puz.grid));
-      const [dir, setDir] = useState(DIRS.ACROSS);
-      const [active, setActive] = useState(() => {
-        for (let r=0; r<puz.meta.N; r++) for (let c=0; c<puz.meta.N; c++) if (puz.grid[r][c] !== "#") return { r, c };
-        return { r:0, c:0 };
-      });
-      const [checked, setChecked] = useState(false);
-
-      useEffect(() => { setUserGrid(emptyUserGridFrom(puz.grid)); setChecked(false); }, [puz.id]);
-
-      return { puz, setPuz, userGrid, setUserGrid, dir, setDir, active, setActive, checked, setChecked };
-    }
-
-    function getCurrentRun(meta, dir, r, c) {
-      const runs = dir === DIRS.ACROSS ? meta.across : meta.down;
-      for (const run of runs) {
-        if (dir === DIRS.ACROSS) {
-          if (r === run.row && c >= run.col && c < run.col + run.length) return run;
-        } else {
-          if (c === run.col && r >= run.row && r < run.row + run.length) return run;
-        }
-      }
-      return null;
-    }
-    const coordsOfRun = (run, dir) => run ? Array.from({length: run.length}, (_,i)=> dir===DIRS.ACROSS ? {r:run.row,c:run.col+i} : {r:run.row+i,c:run.col}) : [];
 
     // ---------- UI atoms ----------
     function MiniCell({ cell, isActive, inActiveWord, userCh, correct, disabled, onClick }) {
@@ -243,12 +184,25 @@
       );
     }
 
-    function Controls({ timeLeft, disabled, onNew, onClear, onCheck, onRevealRun, onRevealAll, onImport, onExport }) {
+    function Controls({ timeLeft, disabled, level, setLevel, onNew, onClear, onCheck, onRevealRun, onRevealAll, onImport, onExport }) {
       const [importText, setImportText] = useState("");
       const mins = Math.floor(timeLeft/60), secs = timeLeft%60;
       return (
         <div className="flex flex-wrap items-center gap-2">
           <div className="px-3 py-1 rounded-md border bg-white font-mono text-sm">⏱ {pad(mins)}:{pad(secs)}</div>
+
+          {/* Difficulty selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm">Difficulty:</span>
+            <select className="px-2 py-1 border rounded-md text-sm"
+                    value={level}
+                    onChange={(e)=>setLevel(e.target.value)}>
+              <option>Easy</option>
+              <option>Medium</option>
+              <option>Hard</option>
+            </select>
+          </div>
+
           <button className="px-3 py-1 rounded-md border bg-white" onClick={onNew}>New puzzle</button>
           <div className="w-px h-6 bg-neutral-300 mx-1" />
           <button className="px-3 py-1 rounded-md border bg-white" onClick={onClear} disabled={disabled}>Clear</button>
@@ -287,19 +241,39 @@
 
     // ---------- App ----------
     function App() {
-      // materialize a fresh puzzle (random clues) on each load
-      const [puzStateSeed, setPuzStateSeed] = useState(() => Math.random());
-      const initialPuzzle = useMemo(() => materializePuzzle(BASE_GRID, CLUE_OPTIONS), [puzStateSeed]);
+      // Difficulty (default Medium)
+      const [level, setLevel] = useState("Medium");
 
-      const { puz, setPuz, userGrid, setUserGrid, dir, setDir, active, setActive, checked, setChecked } =
-        usePuzzle(initialPuzzle.grid, CLUE_OPTIONS);
-      useEffect(() => { setPuz(initialPuzzle); }, [initialPuzzle.id]);
-
-      // 10-min timer
+      // 10-minute timer state (declare before effects that use it)
       const [timeLeft, setTimeLeft] = useState(600);
       const [timeUp, setTimeUp] = useState(false);
       const [solved, setSolved] = useState(false);
 
+      // Build a fresh puzzle whenever page loads, level changes, or "New puzzle"
+      const [seed, setSeed] = useState(() => Math.random());
+      const banks = CLUES[level.toLowerCase()];
+      const puzzle = useMemo(() => materializePuzzle(BASE_GRID, banks), [seed, level]);
+
+      // State derived from the current puzzle instance
+      const [puz, setPuz] = useState(puzzle);
+      const [userGrid, setUserGrid] = useState(emptyUserGridFrom(puzzle.grid));
+      const [dir, setDir] = useState(DIRS.ACROSS);
+      const [active, setActive] = useState(() => {
+        for (let r=0; r<puzzle.meta.N; r++) for (let c=0; c<puzzle.meta.N; c++) if (puzzle.grid[r][c] !== "#") return { r, c };
+        return { r:0, c:0 };
+      });
+      const [checked, setChecked] = useState(false);
+
+      // When puzzle changes (seed or level), reset play state + timer
+      useEffect(() => {
+        setPuz(puzzle);
+        setUserGrid(emptyUserGridFrom(puzzle.grid));
+        setChecked(false);
+        outer: for (let r=0; r<puzzle.meta.N; r++) for (let c=0; c<puzzle.meta.N; c++) if (puzzle.grid[r][c] !== "#") { setActive({ r, c }); break outer; }
+        setTimeLeft(600); setTimeUp(false); setSolved(false);
+      }, [puzzle.id]);
+
+      // 10-minute ticking timer
       useEffect(() => {
         if (timeUp || solved) return;
         const t = setInterval(() => setTimeLeft(x => {
@@ -321,6 +295,15 @@
       }, [userGrid, puz.grid]);
 
       const N = puz.meta.N;
+      const getCurrentRun = (meta, dir, r, c) => {
+        const runs = dir === DIRS.ACROSS ? meta.across : meta.down;
+        for (const run of runs) {
+          if (dir === DIRS.ACROSS) { if (r === run.row && c >= run.col && c < run.col + run.length) return run; }
+          else { if (c === run.col && r >= run.row && r < run.row + run.length) return run; }
+        }
+        return null;
+      };
+      const coordsOfRun = (run, dir) => run ? Array.from({length: run.length}, (_,i)=> dir===DIRS.ACROSS?{r:run.row,c:run.col+i}:{r:run.row+i,c:run.col}) : [];
       const activeRun = getCurrentRun(puz.meta, dir, active.r, active.c);
       const activeCoords = coordsOfRun(activeRun, dir);
       const gridRef = useRef(null);
@@ -338,8 +321,10 @@
             const next = [...userGrid];
             next[active.r] = setCharAt(next[active.r], active.c, k.toUpperCase());
             setUserGrid(next); setChecked(false);
-            const nxt = nextCell({ N, grid: puz.grid, r: active.r, c: active.c, dir });
-            if (nxt) setActive(nxt);
+            const step = dir === "across" ? [0,1] : [1,0];
+            let nr = active.r + step[0], nc = active.c + step[1];
+            while (inBounds(N, nr, nc) && puz.grid[nr][nc] === "#") { nr += step[0]; nc += step[1]; }
+            if (inBounds(N, nr, nc)) setActive({ r: nr, c: nc });
             return;
           }
           if (k === "Backspace") {
@@ -350,11 +335,12 @@
               next[active.r] = setCharAt(next[active.r], active.c, " ");
               setUserGrid(next);
             } else {
-              const prv = prevCell({ N, grid: puz.grid, r: active.r, c: active.c, dir });
-              if (prv) {
-                next[prv.r] = setCharAt(next[prv.r], prv.c, " ");
-                setUserGrid(next);
-                setActive(prv);
+              const step = dir === "across" ? [0,-1] : [-1,0];
+              let nr = active.r + step[0], nc = active.c + step[1];
+              while (inBounds(N, nr, nc) && puz.grid[nr][nc] === "#") { nr += step[0]; nc += step[1]; }
+              if (inBounds(N, nr, nc)) {
+                next[nr] = setCharAt(next[nr], nc, " ");
+                setUserGrid(next); setActive({ r: nr, c: nc });
               }
             }
             setChecked(false);
@@ -397,12 +383,7 @@
         setUserGrid(next);
       };
       const revealAll = () => setUserGrid(puz.grid.map(r => r.replace(/#/g, '#')));
-      const newPuzzle = () => {
-        // New random clues (and a fresh timer)
-        setPuz(materializePuzzle(BASE_GRID, CLUE_OPTIONS));
-        setUserGrid(emptyUserGridFrom(BASE_GRID));
-        setChecked(false); setTimeLeft(600); setTimeUp(false); setSolved(false);
-      };
+      const newPuzzle = () => setSeed(Math.random());  // fresh puzzle at current difficulty
 
       const correctness = useMemo(() => {
         if (!checked) return null;
@@ -420,18 +401,20 @@
         <div className="p-6 max-w-5xl mx-auto">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold">Hard Mini</h1>
-              <div className="text-sm text-neutral-500">by Rosh</div>
+              <h1 className="text-2xl font-semibold">Mini Crossword</h1>
+              <div className="text-sm text-neutral-500">by Rosh • {level}</div>
             </div>
             <Controls
               timeLeft={timeLeft}
               disabled={timeUp || solved}
+              level={level}
+              setLevel={(lvl)=>{ setLevel(lvl); setSeed(Math.random()); }}
               onNew={newPuzzle}
               onClear={clearAll}
               onCheck={check}
               onRevealRun={revealRun}
               onRevealAll={revealAll}
-              onImport={(txt)=>{ try{ const obj=JSON.parse(txt); if(!obj.id) obj.id=`import-${Date.now()}`; if(!obj.size||obj.grid?.length!==obj.size) throw new Error("Grid size mismatch"); setPuz({ ...obj, meta: generateMeta(obj.grid) }); setUserGrid(emptyUserGridFrom(obj.grid)); setChecked(false); setTimeLeft(600); setTimeUp(false); setSolved(false);}catch(e){ alert("Import failed: " + e.message); } }}
+              onImport={(txt)=>{ try{ const obj=JSON.parse(txt); if(!obj.id) obj.id=`import-${Date.now()}`; if(!obj.size||obj.grid?.length!==obj.size) throw new Error("Grid size mismatch"); const m={...obj, meta: generateMeta(obj.grid)}; setSeed(Math.random()); setPuz(m); setUserGrid(emptyUserGridFrom(obj.grid)); setChecked(false); setTimeLeft(600); setTimeUp(false); setSolved(false);}catch(e){ alert("Import failed: " + e.message); } }}
               onExport={()=>{ const data=JSON.stringify({ id:puz.id, title:puz.title, author:puz.author, date:puz.date, size:puz.size, grid:puz.grid, clues:puz.clues }, null, 2); const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([data],{type:"application/json"})); a.download=`${puz.title||puz.id}.json`; a.click(); }}
             />
           </div>
@@ -439,7 +422,7 @@
           <div ref={gridRef} tabIndex={0} className="mt-6 grid grid-cols-1 lg:grid-cols-[minmax(0,400px)_1fr] gap-8 items-start outline-none"
                onKeyDown={(e)=>{ if(e.key===' ') e.preventDefault(); }}>
             <div>
-              <div className="grid" style={{ gridTemplateColumns: `repeat(${N}, minmax(0, 1fr))`, gap: '4px' }}>
+              <div className="grid" style={{ gridTemplateColumns: `repeat(${puz.meta.N}, minmax(0, 1fr))`, gap: '4px' }}>
                 {puz.meta.numbering.flatMap((rowNums, r) =>
                   rowNums.map((num, c) => {
                     const cell = { ch: puz.grid[r][c], num, row: r, col: c };
@@ -508,17 +491,17 @@
           {timeUp && (
             <Overlay
               title="Time’s up!"
-              subtitle="Reveal the grid or try a fresh set of clues."
+              subtitle="Reveal the grid or try a fresh one."
               primary={<button className="px-4 py-2 rounded-md bg-indigo-600 text-white" onClick={()=>setUserGrid(puz.grid.map(r=>r.replace(/#/g,'#')))}>Reveal solution</button>}
-              secondary={<button className="px-4 py-2 rounded-md border" onClick={newPuzzle}>New puzzle</button>}
+              secondary={<button className="px-4 py-2 rounded-md border" onClick={()=>setSeed(Math.random())}>New puzzle</button>}
             />
           )}
           {(!timeUp && solved) && (
             <Overlay
               title="Nice solve! 🎯"
               subtitle={`Finished with ${pad(Math.floor(timeLeft/60))}:${pad(timeLeft%60)} left`}
-              primary={<button className="px-4 py-2 rounded-md bg-indigo-600 text-white" onClick={newPuzzle}>New puzzle</button>}
-              secondary={<button className="px-4 py-2 rounded-md border" onClick={()=>setChecked(true)}>Check grid</button>}
+              primary={<button className="px-4 py-2 rounded-md bg-indigo-600 text-white" onClick={()=>setSeed(Math.random())}>New puzzle</button>}
+              secondary={<button className="px-4 py-2 rounded-md border" onClick={()=>{/* peek */}}>OK</button>}
             />
           )}
         </div>
